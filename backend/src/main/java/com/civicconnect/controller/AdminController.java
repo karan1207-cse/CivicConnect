@@ -12,7 +12,10 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -143,16 +146,72 @@ public class AdminController {
 
     @GetMapping("/stats")
     public ResponseEntity<?> getStats() {
-        return ResponseEntity.ok(Map.of(
-                "totalComplaints", complaintRepo.count(),
-                "pending", complaintRepo.countByStatus("PENDING"),
-                "assigned", complaintRepo.countByStatus("ASSIGNED"),
-                "inProgress", complaintRepo.countByStatus("IN_PROGRESS"),
-                "resolved", complaintRepo.countByStatus("RESOLVED"),
-                "rejected", complaintRepo.countByStatus("REJECTED"),
-                "activeOfficers", userRepo.findByRole("OFFICER").stream().filter(User::isActive).count(),
-                "totalCitizens", userRepo.findByRole("CITIZEN").size()
-        ));
+        List<Complaint> allComplaints = complaintRepo.findAll();
+        long totalComplaints = allComplaints.size();
+
+        // 1. Calculate real category distribution
+        Map<String, Long> catCounts = allComplaints.stream()
+                .collect(Collectors.groupingBy(
+                        c -> (c.getCategory() == null || c.getCategory().isBlank()) ? "OTHER" : c.getCategory(),
+                        Collectors.counting()
+                ));
+
+        List<Map<String, Object>> categories = new ArrayList<>();
+        catCounts.entrySet().stream()
+                .sorted((a, b) -> Long.compare(b.getValue(), a.getValue()))
+                .forEach(entry -> {
+                    long count = entry.getValue();
+                    int pct = totalComplaints > 0 ? (int) Math.round((count * 100.0) / totalComplaints) : 0;
+                    categories.add(Map.of("name", entry.getKey(), "count", count, "percentage", pct));
+                });
+
+        // 2. Calculate real 14-day trend timeline
+        LocalDate today = LocalDate.now();
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MMM dd");
+        List<Map<String, Object>> trends = new ArrayList<>();
+        for (int i = 13; i >= 0; i--) {
+            LocalDate d = today.minusDays(i);
+            long dayPending = 0;
+            long dayInProgress = 0;
+            long dayResolved = 0;
+            long dayTotal = 0;
+
+            for (Complaint c : allComplaints) {
+                if (c.getCreatedAt() != null && c.getCreatedAt().toLocalDate().equals(d)) {
+                    dayTotal++;
+                    String st = c.getStatus() != null ? c.getStatus().toUpperCase() : "PENDING";
+                    if ("PENDING".equals(st)) {
+                        dayPending++;
+                    } else if ("ASSIGNED".equals(st) || "IN_PROGRESS".equals(st)) {
+                        dayInProgress++;
+                    } else if ("RESOLVED".equals(st)) {
+                        dayResolved++;
+                    }
+                }
+            }
+            trends.add(Map.of(
+                    "date", d.format(fmt),
+                    "rawDate", d.toString(),
+                    "pending", dayPending,
+                    "inProgress", dayInProgress,
+                    "resolved", dayResolved,
+                    "total", dayTotal
+            ));
+        }
+
+        Map<String, Object> resp = new HashMap<>();
+        resp.put("totalComplaints", totalComplaints);
+        resp.put("pending", complaintRepo.countByStatus("PENDING"));
+        resp.put("assigned", complaintRepo.countByStatus("ASSIGNED"));
+        resp.put("inProgress", complaintRepo.countByStatus("IN_PROGRESS"));
+        resp.put("resolved", complaintRepo.countByStatus("RESOLVED"));
+        resp.put("rejected", complaintRepo.countByStatus("REJECTED"));
+        resp.put("activeOfficers", userRepo.findByRole("OFFICER").stream().filter(User::isActive).count());
+        resp.put("totalCitizens", userRepo.findByRole("CITIZEN").size());
+        resp.put("categories", categories);
+        resp.put("trends", trends);
+
+        return ResponseEntity.ok(resp);
     }
 
     @GetMapping("/audit-logs")
