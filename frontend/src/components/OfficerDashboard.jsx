@@ -20,71 +20,81 @@ export default function OfficerDashboard({ user, notify }) {
 
   const handleUpdate = async (id) => {
     try {
-      await axios.put(`/api/officer/complaints/${id}/status`, {
-        status, resolutionNotes: notes
-      }, authHeader);
+      await axios.put(`/api/officer/complaints/${id}/status`, { status, resolutionNotes: notes }, authHeader);
       notify('Complaint updated successfully!');
       setEditingId(null);
       setNotes('');
       loadAssignedComplaints();
     } catch (err) {
-      notify(err.response?.data?.message || 'Failed to update complaint');
+      notify(err.response?.data?.message || 'Update failed');
     }
   };
 
   return (
-    <section className="card">
-      <div className="admin-header">
-        <h3>Field Officer Dashboard</h3>
-        <div className="stats-row">
-          <span className="stat">Assigned: {complaints.length}</span>
-          <span className="stat stat-pend">In Progress: {complaints.filter(c => c.status === 'IN_PROGRESS' || c.status === 'ASSIGNED').length}</span>
-          <span className="stat stat-res">Resolved: {complaints.filter(c => c.status === 'RESOLVED').length}</span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div className="stats-grid">
+        <div className="stat-card stat-card-border-green">
+          <div className="stat-icon-wrapper stat-icon-green">📋</div>
+          <span className="stat-label">Total Assigned</span>
+          <div className="stat-num" style={{ marginTop: 8 }}>{complaints.length}</div>
+        </div>
+        <div className="stat-card stat-card-border-blue">
+          <div className="stat-icon-wrapper stat-icon-blue">🔄</div>
+          <span className="stat-label">In Progress</span>
+          <div className="stat-num" style={{ marginTop: 8 }}>{complaints.filter(c => c.status === 'IN_PROGRESS' || c.status === 'ASSIGNED').length}</div>
+        </div>
+        <div className="stat-card stat-card-border-orange">
+          <div className="stat-icon-wrapper stat-icon-orange">✅</div>
+          <span className="stat-label">Resolved by You</span>
+          <div className="stat-num" style={{ marginTop: 8 }}>{complaints.filter(c => c.status === 'RESOLVED').length}</div>
         </div>
       </div>
 
-      <div className="list">
-        {complaints.length === 0 ? <p className="empty">No complaints currently assigned to you.</p> : (
-          complaints.map(c => (
-            <div key={c.id} className="item admin-item">
-              <div style={{ flex: 1 }}>
-                <h4>{c.title}</h4>
-                <p>{c.description}</p>
-                <small>Citizen: {c.citizenEmail} | Date: {new Date(c.createdAt).toLocaleDateString()}</small>
-                <div className="tags" style={{ marginTop: 8 }}>
-                  <span className="badge category">{c.category}</span>
-                  <span className={`badge prio-${c.priority.toLowerCase()}`}>{c.priority}</span>
-                  <span className={`badge status-${c.status.toLowerCase()}`}>{c.status}</span>
-                </div>
-                {c.resolutionNotes && (
-                  <div className="resolution-box" style={{ marginTop: 8 }}>
-                    <b>Current Notes:</b> {c.resolutionNotes}
-                  </div>
-                )}
-                {editingId === c.id && (
-                  <div className="edit-box" style={{ marginTop: 12 }}>
-                    <select value={status} onChange={e => setStatus(e.target.value)}>
-                      <option value="IN_PROGRESS">IN_PROGRESS</option>
-                      <option value="RESOLVED">RESOLVED</option>
-                      <option value="REJECTED">REJECTED</option>
-                    </select>
-                    <textarea rows="2" placeholder="Add resolution details / action taken..." value={notes} onChange={e => setNotes(e.target.value)} />
-                    <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-                      <button className="btn btn-primary" onClick={() => handleUpdate(c.id)}>Submit Update</button>
-                      <button className="btn btn-outline" onClick={() => setEditingId(null)}>Cancel</button>
+      <div className="chart-card">
+        <div className="card-top-row"><span className="card-heading">Assigned Grievances ({complaints.length})</span></div>
+        <table className="clean-table">
+          <thead><tr><th>ID</th><th>Issue Details</th><th>Citizen</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody>
+            {complaints.map(c => (
+              <tr key={c.id}>
+                <td>#{c.id}</td>
+                <td>
+                  <b>{c.title}</b>
+                  <p style={{ fontSize: '0.8rem', color: '#64748b' }}>{c.description}</p>
+                  {c.resolutionNotes && <div className="resolution-box" style={{ marginTop: 4, fontSize: '0.8rem' }}><b>Notes:</b> {c.resolutionNotes}</div>}
+                  {editingId === c.id && (
+                    <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <select value={status} onChange={e => setStatus(e.target.value)}>
+                        <option value="IN_PROGRESS">IN_PROGRESS</option>
+                        <option value="RESOLVED">RESOLVED</option>
+                        <option value="REJECTED">REJECTED</option>
+                      </select>
+                      <textarea placeholder="Add resolution note..." rows="2" value={notes} onChange={e => setNotes(e.target.value)} />
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="btn btn-primary" onClick={() => handleUpdate(c.id)}>Save</button>
+                        <button className="btn btn-outline" onClick={() => setEditingId(null)}>Cancel</button>
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-              {editingId !== c.id && (
-                <button className="btn btn-secondary" onClick={() => { setEditingId(c.id); setStatus(c.status); setNotes(c.resolutionNotes || ''); }}>
-                  Update
-                </button>
-              )}
-            </div>
-          ))
-        )}
+                  )}
+                </td>
+                <td>{c.citizenEmail}</td>
+                <td>
+                  <span className={`status-pill ${c.status === 'RESOLVED' ? 'pill-closed' : c.status === 'IN_PROGRESS' ? 'pill-inprogress' : 'pill-open'}`}>
+                    {c.status}
+                  </span>
+                </td>
+                <td>
+                  {editingId !== c.id && (
+                    <button className="btn btn-secondary" onClick={() => { setEditingId(c.id); setStatus(c.status); setNotes(c.resolutionNotes || ''); }}>
+                      Update
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-    </section>
+    </div>
   );
 }
