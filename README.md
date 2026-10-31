@@ -21,9 +21,10 @@ mvn spring-boot:run
 
 ## Frontend
 
-Install the frontend dependencies and start Vite with:
+Install the frontend dependencies and start Vite from `frontend/` with:
 
 ```shell
+cd frontend
 npm install
 npm run dev
 ```
